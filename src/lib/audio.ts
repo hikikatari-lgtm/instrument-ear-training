@@ -94,6 +94,10 @@ interface BassRig {
 
 let bassRig: BassRig | null = null;
 let bassParts: { dispose: () => void }[] = [];
+// UI highlight timers, driven by setTimeout rather than Tone.Draw so the
+// keyboard/fretboard highlight stays reliable even when requestAnimationFrame
+// is throttled (e.g. background tab). Audio stays sample-accurate on Transport.
+let bassUiTimers: ReturnType<typeof setTimeout>[] = [];
 
 function getBassRig(): BassRig {
   if (bassRig) return bassRig;
@@ -150,6 +154,8 @@ export function stopBassGroove() {
     }
   });
   bassParts = [];
+  bassUiTimers.forEach((t) => clearTimeout(t));
+  bassUiTimers = [];
 }
 
 interface BassGrooveCallbacks {
@@ -169,7 +175,6 @@ export async function playBassGroove(
 
   const rig = getBassRig();
   const transport = Tone.getTransport();
-  const draw = Tone.getDraw();
   transport.bpm.value = bpm;
   transport.position = 0;
 
@@ -207,7 +212,6 @@ export async function playBassGroove(
 
   const bassPart = new Tone.Part((time, ev: (typeof bassEvents)[number]) => {
     rig.bass.triggerAttackRelease(ev.pitch, "4n", time);
-    draw.schedule(() => cb.onStep?.(ev.index), time);
   }, bassEvents);
 
   const kickPart = new Tone.Part((time) => {
@@ -228,15 +232,23 @@ export async function playBassGroove(
     bassParts.push(p);
   });
 
-  // end one bar after the last main bar
-  const endTime = `${1 + mainBars}:0:0`;
-  transport.scheduleOnce((time) => {
-    draw.schedule(() => {
+  // UI highlights: drive with setTimeout (decoupled from rAF/Tone.Draw so the
+  // highlight is reliable). count-in = one bar (4 beats); then one root per beat.
+  const beatMs = (60 / bpm) * 1000;
+  const countInMs = 4 * beatMs;
+  notes.forEach((_, i) => {
+    bassUiTimers.push(
+      setTimeout(() => cb.onStep?.(i), countInMs + i * beatMs)
+    );
+  });
+  // end one beat after the last root sounds
+  const endMs = countInMs + notes.length * beatMs;
+  bassUiTimers.push(
+    setTimeout(() => {
       cb.onEnd?.();
-    }, time);
-    // defer teardown so this callback finishes cleanly
-    setTimeout(() => stopBassGroove(), 0);
-  }, endTime);
+      stopBassGroove();
+    }, endMs)
+  );
 
   transport.start();
 }
