@@ -1,9 +1,11 @@
 "use client";
 
-// Standard vertical guitar chord diagram.
-// `frets` is 6th string (low E) -> 1st string (high E). Columns run left
-// (low E) to right (high E); fret rows run downward from the nut. Barres are
-// drawn as a bar; muted (×) / open (○) markers sit above the nut.
+// Horizontal guitar chord diagram (muuu.jp style).
+// `frets` is 6th string (low E) -> 1st string (high E), index 0..5.
+// Strings are horizontal: top row = 1st string (high E), bottom = 6th (low E).
+// Frets are vertical lines: left = nut/head, right = body.
+// Fret numbers run along the bottom; open (○) / muted (×) markers sit at the
+// left edge; barres are drawn as a vertical bar; the nut is a thick left line.
 
 interface ChordDiagramProps {
   frets: (number | "x")[];
@@ -11,11 +13,11 @@ interface ChordDiagramProps {
   showName?: boolean;
 }
 
-const COL_GAP = 30;
-const ROW_GAP = 34;
-const BOARD_LEFT = 34;
-const BOARD_TOP = 40;
-const ROWS = 5;
+const ROW_GAP = 26; // vertical spacing between strings
+const CELL_W = 46; // fret (column) width
+const BOARD_LEFT = 42; // room for ○ / × markers
+const BOARD_TOP = 22;
+const FRET_COUNT = 4;
 const NUM_STRINGS = 6;
 
 export default function ChordDiagram({
@@ -23,20 +25,22 @@ export default function ChordDiagram({
   name,
   showName = false,
 }: ChordDiagramProps) {
-  const boardWidth = COL_GAP * (NUM_STRINGS - 1);
-  const boardHeight = ROW_GAP * ROWS;
-  const width = BOARD_LEFT + boardWidth + 34;
-  const height = BOARD_TOP + boardHeight + 28;
+  const boardWidth = CELL_W * FRET_COUNT;
+  const boardHeight = ROW_GAP * (NUM_STRINGS - 1);
+  const width = BOARD_LEFT + boardWidth + 22;
+  const height = BOARD_TOP + boardHeight + 32;
 
   const fretted = frets.filter(
     (f): f is number => typeof f === "number" && f > 0
   );
   const maxFret = fretted.length ? Math.max(...fretted) : 0;
   const minFret = fretted.length ? Math.min(...fretted) : 0;
-  const baseFret = maxFret <= ROWS ? 0 : minFret - 1;
+  const baseFret = maxFret <= FRET_COUNT ? 0 : minFret - 1;
 
-  const colX = (i: number) => BOARD_LEFT + i * COL_GAP;
-  const rowLineY = (r: number) => BOARD_TOP + r * ROW_GAP;
+  // string array index i (0 = low E / 6th) -> row (0 = top = high E / 1st)
+  const rowY = (i: number) => BOARD_TOP + (NUM_STRINGS - 1 - i) * ROW_GAP;
+  const fretX = (col: number) => BOARD_LEFT + col * CELL_W; // grid line x
+  const dotX = (fret: number) => BOARD_LEFT + (fret - baseFret - 0.5) * CELL_W;
 
   // barre detection: lowest fret shared across a contiguous span of >=3
   // strings with no open / muted string inside that span.
@@ -57,57 +61,57 @@ export default function ChordDiagram({
 
   const els: React.ReactNode[] = [];
 
-  // strings (vertical)
+  // strings (horizontal lines)
   for (let i = 0; i < NUM_STRINGS; i++) {
     els.push(
       <line
         key={`str-${i}`}
-        x1={colX(i)}
-        y1={rowLineY(0)}
-        x2={colX(i)}
-        y2={rowLineY(ROWS)}
+        x1={BOARD_LEFT}
+        y1={rowY(i)}
+        x2={BOARD_LEFT + boardWidth}
+        y2={rowY(i)}
         stroke="#6a6a6a"
         strokeWidth={1.3}
       />
     );
   }
 
-  // fret lines (horizontal)
-  for (let r = 0; r <= ROWS; r++) {
-    const isNut = baseFret === 0 && r === 0;
+  // frets (vertical lines)
+  for (let c = 0; c <= FRET_COUNT; c++) {
+    const isNut = baseFret === 0 && c === 0;
     els.push(
       <line
-        key={`fr-${r}`}
-        x1={colX(0)}
-        y1={rowLineY(r)}
-        x2={colX(NUM_STRINGS - 1)}
-        y2={rowLineY(r)}
+        key={`fr-${c}`}
+        x1={fretX(c)}
+        y1={rowY(NUM_STRINGS - 1)}
+        x2={fretX(c)}
+        y2={rowY(0)}
         stroke={isNut ? "#d4af37" : "#6a6a6a"}
-        strokeWidth={isNut ? 5 : 1.3}
+        strokeWidth={isNut ? 6 : 1.3}
       />
     );
   }
 
-  // position label (e.g. "3fr") when the window starts above the nut
-  if (baseFret > 0) {
+  // fret numbers below the board (absolute fret position)
+  for (let c = 1; c <= FRET_COUNT; c++) {
     els.push(
       <text
-        key="basefret"
-        x={colX(0) - 14}
-        y={rowLineY(0) + ROW_GAP / 2 + 4}
+        key={`fn-${c}`}
+        x={BOARD_LEFT + (c - 0.5) * CELL_W}
+        y={rowY(NUM_STRINGS - 1) + 24}
         textAnchor="middle"
-        fontSize={12}
-        fill="#d4af37"
+        fontSize={11}
+        fill="#888"
       >
-        {baseFret + 1}fr
+        {baseFret + c}
       </text>
     );
   }
 
-  // open / muted markers above the nut
+  // open / muted markers at the left edge
   frets.forEach((f, i) => {
-    const x = colX(i);
-    const y = BOARD_TOP - 14;
+    const x = BOARD_LEFT - 18;
+    const y = rowY(i);
     if (f === "x") {
       els.push(
         <text
@@ -136,17 +140,17 @@ export default function ChordDiagram({
     }
   });
 
-  // barre bar
+  // barre (vertical bar across the spanned strings at one fret)
   if (barre) {
-    const row = barre.fret - baseFret;
-    const cy = rowLineY(0) + (row - 0.5) * ROW_GAP;
+    const yTop = rowY(barre.to); // higher string index -> higher on screen
+    const yBottom = rowY(barre.from);
     els.push(
       <rect
         key="barre"
-        x={colX(barre.from) - 9}
-        y={cy - 9}
-        width={colX(barre.to) - colX(barre.from) + 18}
-        height={18}
+        x={dotX(barre.fret) - 9}
+        y={yTop - 9}
+        width={18}
+        height={yBottom - yTop + 18}
         rx={9}
         fill="#d4af37"
       />
@@ -156,13 +160,11 @@ export default function ChordDiagram({
   // finger dots
   frets.forEach((f, i) => {
     if (typeof f !== "number" || f <= 0) return;
-    const row = f - baseFret;
-    const cy = rowLineY(0) + (row - 0.5) * ROW_GAP;
     els.push(
       <circle
         key={`dot-${i}`}
-        cx={colX(i)}
-        cy={cy}
+        cx={dotX(f)}
+        cy={rowY(i)}
         r={8.5}
         fill="#d4af37"
         stroke="#0a0a0a"
@@ -181,7 +183,7 @@ export default function ChordDiagram({
         width="100%"
         role="img"
         aria-label="ギターコードダイアグラム"
-        style={{ maxWidth: 220, height: "auto" }}
+        style={{ maxWidth: 280, height: "auto" }}
       >
         {els}
       </svg>

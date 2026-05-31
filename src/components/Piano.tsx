@@ -1,12 +1,13 @@
 "use client";
 
 // SVG piano keyboard spanning C3..B4 (two octaves).
-// `highlight` keys (upper chord tones) are gold; `rootHighlight` keys (the bass
-// root) are red, so the left-hand root reads distinctly from the right hand.
+// `highlight` keys (upper chord tones) are gold with their note name.
+// `rootPc` (the left-hand root) is shown in red on a SINGLE key — the lowest
+// occurrence on the keyboard — and labelled "R" instead of its note name.
 
 interface PianoProps {
   highlight?: number[]; // pitch classes 0-11 — upper chord tones (gold)
-  rootHighlight?: number[]; // pitch classes 0-11 — root (red)
+  rootPc?: number | null; // pitch class 0-11 — root (red, single key, "R")
   showLabels?: boolean;
 }
 
@@ -41,13 +42,15 @@ const OCTAVES = [3, 4];
 
 export default function Piano({
   highlight = [],
-  rootHighlight = [],
+  rootPc = null,
   showLabels = true,
 }: PianoProps) {
   const hi = new Set(highlight);
-  const rootHi = new Set(rootHighlight);
   const totalWhite = WHITE_DEFS.length * OCTAVES.length;
   const width = totalWhite * WHITE_W;
+
+  // The root is drawn red on a single key only — the first (lowest) occurrence.
+  let rootPlaced = false;
 
   const whiteKeys: React.ReactNode[] = [];
   const blackKeys: React.ReactNode[] = [];
@@ -56,8 +59,10 @@ export default function Piano({
     WHITE_DEFS.forEach((def, i) => {
       const index = octIdx * WHITE_DEFS.length + i;
       const x = index * WHITE_W;
-      const isRoot = rootHi.has(def.pc);
-      const on = isRoot || hi.has(def.pc);
+      const isRoot = rootPc != null && def.pc === rootPc && !rootPlaced;
+      if (isRoot) rootPlaced = true;
+      const isGold = !isRoot && hi.has(def.pc);
+      const on = isRoot || isGold;
       whiteKeys.push(
         <g key={`w-${octave}-${def.name}`}>
           <rect
@@ -66,7 +71,7 @@ export default function Piano({
             width={WHITE_W}
             height={WHITE_H}
             rx={3}
-            fill={isRoot ? ROOT_RED : hi.has(def.pc) ? GOLD : "#f5f5f3"}
+            fill={isRoot ? ROOT_RED : isGold ? GOLD : "#f5f5f3"}
             stroke="#0a0a0a"
             strokeWidth={1.5}
           />
@@ -75,12 +80,11 @@ export default function Piano({
               x={x + WHITE_W / 2}
               y={WHITE_H - 12}
               textAnchor="middle"
-              fontSize={12}
+              fontSize={isRoot ? 14 : 12}
               fontWeight={on ? 700 : 400}
-              fill={on ? "#0a0a0a" : "#888"}
+              fill={isRoot ? "#fff" : on ? "#0a0a0a" : "#888"}
             >
-              {def.name}
-              {octave}
+              {isRoot ? "R" : `${def.name}${octave}`}
             </text>
           )}
         </g>
@@ -89,8 +93,10 @@ export default function Piano({
       const black = BLACK_DEFS[i];
       if (black) {
         const bx = (index + 1) * WHITE_W - BLACK_W / 2;
-        const isRoot2 = rootHi.has(black.pc);
-        const on2 = isRoot2 || hi.has(black.pc);
+        const isRoot2 = rootPc != null && black.pc === rootPc && !rootPlaced;
+        if (isRoot2) rootPlaced = true;
+        const isGold2 = !isRoot2 && hi.has(black.pc);
+        const on2 = isRoot2 || isGold2;
         blackKeys.push(
           <g key={`b-${octave}-${black.name}`}>
             <rect
@@ -99,7 +105,7 @@ export default function Piano({
               width={BLACK_W}
               height={BLACK_H}
               rx={3}
-              fill={isRoot2 ? ROOT_RED : hi.has(black.pc) ? GOLD : "#161616"}
+              fill={isRoot2 ? ROOT_RED : isGold2 ? GOLD : "#161616"}
               stroke="#000"
               strokeWidth={1.5}
             />
@@ -108,11 +114,11 @@ export default function Piano({
                 x={bx + BLACK_W / 2}
                 y={BLACK_H - 10}
                 textAnchor="middle"
-                fontSize={10}
+                fontSize={isRoot2 ? 12 : 10}
                 fontWeight={700}
-                fill="#0a0a0a"
+                fill={isRoot2 ? "#fff" : "#0a0a0a"}
               >
-                {black.name}
+                {isRoot2 ? "R" : black.name}
               </text>
             )}
           </g>

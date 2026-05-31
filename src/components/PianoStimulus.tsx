@@ -45,18 +45,18 @@ export default function PianoStimulus({ chord, answered }: PianoStimulusProps) {
       <div className="mt-6 w-full overflow-x-auto">
         <Piano
           highlight={show ? upperPcs : []}
-          rootHighlight={show ? [rootPc] : []}
+          rootPc={show ? rootPc : null}
         />
       </div>
       {show && (
         <div className="mt-3 flex items-center justify-center gap-4 text-xs text-zinc-400">
           <span className="flex items-center gap-1.5">
             <span className="inline-block h-3 w-3 rounded-sm bg-[#e0533d]" />
-            左手ルート
+            R（ルート）
           </span>
           <span className="flex items-center gap-1.5">
             <span className="inline-block h-3 w-3 rounded-sm bg-gold" />
-            右手コードトーン
+            コードトーン
           </span>
         </div>
       )}
