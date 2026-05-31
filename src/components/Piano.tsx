@@ -1,12 +1,17 @@
 "use client";
 
 // SVG piano keyboard spanning C3..B4 (two octaves).
-// Highlights any key whose pitch class is in `highlight`.
+// `highlight` keys (upper chord tones) are gold; `rootHighlight` keys (the bass
+// root) are red, so the left-hand root reads distinctly from the right hand.
 
 interface PianoProps {
-  highlight?: number[]; // pitch classes 0-11 to highlight (gold)
+  highlight?: number[]; // pitch classes 0-11 — upper chord tones (gold)
+  rootHighlight?: number[]; // pitch classes 0-11 — root (red)
   showLabels?: boolean;
 }
+
+const GOLD = "#d4af37";
+const ROOT_RED = "#e0533d";
 
 const WHITE_W = 40;
 const WHITE_H = 170;
@@ -34,8 +39,13 @@ const BLACK_DEFS: Record<number, { name: string; pc: number }> = {
 
 const OCTAVES = [3, 4];
 
-export default function Piano({ highlight = [], showLabels = true }: PianoProps) {
+export default function Piano({
+  highlight = [],
+  rootHighlight = [],
+  showLabels = true,
+}: PianoProps) {
   const hi = new Set(highlight);
+  const rootHi = new Set(rootHighlight);
   const totalWhite = WHITE_DEFS.length * OCTAVES.length;
   const width = totalWhite * WHITE_W;
 
@@ -46,7 +56,8 @@ export default function Piano({ highlight = [], showLabels = true }: PianoProps)
     WHITE_DEFS.forEach((def, i) => {
       const index = octIdx * WHITE_DEFS.length + i;
       const x = index * WHITE_W;
-      const on = hi.has(def.pc);
+      const isRoot = rootHi.has(def.pc);
+      const on = isRoot || hi.has(def.pc);
       whiteKeys.push(
         <g key={`w-${octave}-${def.name}`}>
           <rect
@@ -55,7 +66,7 @@ export default function Piano({ highlight = [], showLabels = true }: PianoProps)
             width={WHITE_W}
             height={WHITE_H}
             rx={3}
-            fill={on ? "#d4af37" : "#f5f5f3"}
+            fill={isRoot ? ROOT_RED : hi.has(def.pc) ? GOLD : "#f5f5f3"}
             stroke="#0a0a0a"
             strokeWidth={1.5}
           />
@@ -78,7 +89,8 @@ export default function Piano({ highlight = [], showLabels = true }: PianoProps)
       const black = BLACK_DEFS[i];
       if (black) {
         const bx = (index + 1) * WHITE_W - BLACK_W / 2;
-        const on2 = hi.has(black.pc);
+        const isRoot2 = rootHi.has(black.pc);
+        const on2 = isRoot2 || hi.has(black.pc);
         blackKeys.push(
           <g key={`b-${octave}-${black.name}`}>
             <rect
@@ -87,7 +99,7 @@ export default function Piano({ highlight = [], showLabels = true }: PianoProps)
               width={BLACK_W}
               height={BLACK_H}
               rx={3}
-              fill={on2 ? "#d4af37" : "#161616"}
+              fill={isRoot2 ? ROOT_RED : hi.has(black.pc) ? GOLD : "#161616"}
               stroke="#000"
               strokeWidth={1.5}
             />

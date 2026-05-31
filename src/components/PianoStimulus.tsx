@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Piano from "./Piano";
 import PlayButton from "./PlayButton";
 import { playPianoChord, stopPiano } from "@/lib/audio";
-import { chordPitchClasses } from "@/lib/music";
+import { chordHighlightSplit } from "@/lib/music";
 
 interface PianoStimulusProps {
   chord: string;
@@ -34,17 +34,34 @@ export default function PianoStimulus({ chord, answered }: PianoStimulusProps) {
     timer.current = setTimeout(() => setIsPlaying(false), 2300);
   };
 
-  // highlight the chord tones while it rings, or once answered
-  const highlight = isPlaying || answered ? chordPitchClasses(chord) : [];
+  // root (left hand, red) + upper tones (right hand, gold), shown while it
+  // rings or once answered
+  const show = isPlaying || answered;
+  const { rootPc, upperPcs } = chordHighlightSplit(chord);
 
   return (
     <div className="mt-5 flex flex-col items-center">
       <PlayButton isPlaying={isPlaying} onClick={handleToggle} />
       <div className="mt-6 w-full overflow-x-auto">
-        <Piano highlight={highlight} />
+        <Piano
+          highlight={show ? upperPcs : []}
+          rootHighlight={show ? [rootPc] : []}
+        />
       </div>
+      {show && (
+        <div className="mt-3 flex items-center justify-center gap-4 text-xs text-zinc-400">
+          <span className="flex items-center gap-1.5">
+            <span className="inline-block h-3 w-3 rounded-sm bg-[#e0533d]" />
+            左手ルート
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="inline-block h-3 w-3 rounded-sm bg-gold" />
+            右手コードトーン
+          </span>
+        </div>
+      )}
       {answered && (
-        <p className="mt-3 text-lg font-bold text-gold">{chord}</p>
+        <p className="mt-2 text-lg font-bold text-gold">{chord}</p>
       )}
     </div>
   );

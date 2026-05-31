@@ -106,6 +106,37 @@ export function chordVoicing(symbol: string, rootOctave = 4): string[] {
   });
 }
 
+// Split voicing for a "two-hand" piano sound: the left hand plays the root
+// in a low octave (so the chord is clearly grounded, not heard up at C6), the
+// right hand plays the upper tones (3rd / 5th / 7th) in a mid octave.
+export function chordVoicingSplit(
+  symbol: string,
+  leftOctave = 2,
+  rightOctave = 4
+): { leftHand: string; rightHand: string[] } {
+  const { root, quality } = parseChord(symbol);
+  const rootSemi = NOTE_TO_SEMITONE[root] ?? 0;
+  const leftHand = `${SEMITONE_TO_NAME[rootSemi]}${leftOctave}`;
+  const rightHand = QUALITY_INTERVALS[quality]
+    .slice(1) // drop the root — the left hand covers it
+    .map((interval) => {
+      const abs = rootSemi + interval;
+      const octave = rightOctave + Math.floor(abs / 12);
+      return `${SEMITONE_TO_NAME[abs % 12]}${octave}`;
+    });
+  return { leftHand, rightHand };
+}
+
+// Pitch classes for keyboard highlighting, split so the root (left hand) can be
+// shown in red and the upper chord tones (right hand) in gold.
+export function chordHighlightSplit(symbol: string): {
+  rootPc: number;
+  upperPcs: number[];
+} {
+  const pcs = chordPitchClasses(symbol);
+  return { rootPc: pcs[0], upperPcs: pcs.slice(1) };
+}
+
 export function pitchClassOf(note: string): number {
   const match = note.match(/^([A-G][b#]?)/);
   if (!match) return 0;

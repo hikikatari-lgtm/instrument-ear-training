@@ -1,7 +1,12 @@
 // Tone.js audio engine. All functions are client-side only and lazily
 // create synths after the first user gesture to satisfy autoplay policies.
 import * as Tone from "tone";
-import { chordVoicing, guitarChordNotes } from "./music";
+import {
+  chordVoicingSplit,
+  guitarChordNotes,
+  noteToMidi,
+  midiToNote,
+} from "./music";
 
 let started = false;
 
@@ -27,10 +32,12 @@ function getPiano(): Tone.PolySynth {
   return pianoSynth;
 }
 
+// Play the chord as left-hand root (low) + right-hand upper tones (mid), so it
+// is clearly grounded rather than sounding bunched up in a high octave.
 export async function playPianoChord(symbol: string) {
   await ensureStarted();
-  const notes = chordVoicing(symbol, 4);
-  getPiano().triggerAttackRelease(notes, "2n");
+  const { leftHand, rightHand } = chordVoicingSplit(symbol, 2, 4);
+  getPiano().triggerAttackRelease([leftHand, ...rightHand], "2n");
 }
 
 export function stopPiano() {
@@ -39,35 +46,38 @@ export function stopPiano() {
 
 // ---- Guitar ----------------------------------------------------------------
 
-let guitarSynth: Tone.PluckSynth | null = null;
+// One PluckSynth voice per string so the strings ring together (a single
+// monophonic PluckSynth would cut each previous note, killing the arpeggio).
+let guitarVoices: Tone.PluckSynth[] = [];
 let guitarGain: Tone.Gain | null = null;
 
-function getGuitar(): Tone.PluckSynth {
-  if (!guitarSynth) {
+function getGuitarVoices(): Tone.PluckSynth[] {
+  if (guitarVoices.length === 0) {
     guitarGain = new Tone.Gain(1).toDestination();
-    guitarSynth = new Tone.PluckSynth({
-      attackNoise: 2,
-      dampening: 4000,
-      resonance: 0.9,
-    }).connect(guitarGain);
-    guitarSynth.volume.value = -2;
+    for (let i = 0; i < 6; i++) {
+      const v = new Tone.PluckSynth({
+        attackNoise: 1.2,
+        dampening: 5200,
+        resonance: 0.96, // high resonance -> strings sustain / ring out
+      }).connect(guitarGain);
+      v.volume.value = -3;
+      guitarVoices.push(v);
+    }
   }
-  return guitarSynth;
+  return guitarVoices;
 }
 
-export async function playGuitarChord(
-  frets: (number | "x")[],
-  direction: "down" | "up" = "down"
-) {
+// Arpeggiate the chord from the 6th string (low) to the 1st (high), letting the
+// strings ring — a guitar-like "ジャラーン" rather than a tight strum.
+export async function playGuitarChord(frets: (number | "x")[]) {
   await ensureStarted();
-  const synth = getGuitar();
-  const notes = guitarChordNotes(frets);
-  const ordered = direction === "down" ? notes : [...notes].reverse();
-  const delay = 0.035; // 35ms between strings
-  ordered.forEach((note, i) => {
-    setTimeout(() => {
-      synth.triggerAttack(note);
-    }, i * delay * 1000);
+  const voices = getGuitarVoices();
+  if (guitarGain) guitarGain.gain.setValueAtTime(1, Tone.now());
+  const notes = guitarChordNotes(frets); // low E (6th) -> high E (1st)
+  const start = Tone.now();
+  const step = 0.03; // 30ms between strings
+  notes.forEach((note, i) => {
+    voices[i % voices.length].triggerAttack(note, start + i * step);
   });
 }
 
@@ -76,10 +86,10 @@ export function stopGuitar() {
   const now = Tone.now();
   guitarGain.gain.cancelScheduledValues(now);
   guitarGain.gain.setValueAtTime(0, now);
-  // restore so the next strum is audible
+  // restore so the next arpeggio is audible
   setTimeout(() => {
     if (guitarGain) guitarGain.gain.setValueAtTime(1, Tone.now());
-  }, 140);
+  }, 160);
 }
 
 // ---- Bass groove (bass + rock drums via Transport) -------------------------
@@ -163,10 +173,12 @@ interface BassGrooveCallbacks {
   onEnd?: () => void;
 }
 
-// Play a bass line in sync with a rock drum kit. A one-bar hi-hat count-in
-// precedes the groove; `onStep` fires (UI-synced) as each bass root sounds.
+// Play a chord progression on bass in sync with a rock drum kit. Each chord
+// gets a full bar (4 beats), so the changes are slow enough to hear:
+// root(1) -> 5th(2) -> root octave-up(3) -> 5th(4). A one-bar hi-hat count-in
+// precedes the groove; `onStep` fires per chord (UI-synced) as each bar starts.
 export async function playBassGroove(
-  notes: string[],
+  roots: string[],
   bpm = 110,
   cb: BassGrooveCallbacks = {}
 ) {
@@ -178,18 +190,22 @@ export async function playBassGroove(
   transport.bpm.value = bpm;
   transport.position = 0;
 
-  const mainBars = Math.ceil(notes.length / 4);
+  const numChords = roots.length;
 
-  // Bass: one root per quarter note, starting at bar 1 (after the count-in).
-  const bassEvents = notes.map((pitch, i) => ({
-    time: `1:${i % 4}:0`,
-    bar: 1 + Math.floor(i / 4),
-    pitch,
-    index: i,
-  }));
-  // fix bar in time string (template above only used the beat within a bar)
-  bassEvents.forEach((e) => {
-    e.time = `${e.bar}:${e.index % 4}:0`;
+  // Bass pattern per chord: root, 5th, root+octave, 5th (one note per beat).
+  const bassEvents: { time: string; pitch: string }[] = [];
+  roots.forEach((rootNote, ci) => {
+    const rootMidi = noteToMidi(rootNote);
+    const root = midiToNote(rootMidi);
+    const fifth = midiToNote(rootMidi + 7);
+    const octave = midiToNote(rootMidi + 12);
+    const bar = 1 + ci; // bar 0 is the count-in
+    bassEvents.push(
+      { time: `${bar}:0:0`, pitch: root },
+      { time: `${bar}:1:0`, pitch: fifth },
+      { time: `${bar}:2:0`, pitch: octave },
+      { time: `${bar}:3:0`, pitch: fifth }
+    );
   });
 
   const kickEvents: { time: string }[] = [];
@@ -200,8 +216,8 @@ export async function playBassGroove(
   for (let beat = 0; beat < 4; beat++) {
     hihatEvents.push({ time: `0:${beat}:0` });
   }
-  // main groove
-  for (let b = 0; b < mainBars; b++) {
+  // rock drums: one bar per chord
+  for (let b = 0; b < numChords; b++) {
     const bar = 1 + b;
     kickEvents.push({ time: `${bar}:0:0` }, { time: `${bar}:2:0` });
     snareEvents.push({ time: `${bar}:1:0` }, { time: `${bar}:3:0` });
@@ -210,7 +226,7 @@ export async function playBassGroove(
     }
   }
 
-  const bassPart = new Tone.Part((time, ev: (typeof bassEvents)[number]) => {
+  const bassPart = new Tone.Part((time, ev: { pitch: string }) => {
     rig.bass.triggerAttackRelease(ev.pitch, "4n", time);
   }, bassEvents);
 
@@ -232,17 +248,17 @@ export async function playBassGroove(
     bassParts.push(p);
   });
 
-  // UI highlights: drive with setTimeout (decoupled from rAF/Tone.Draw so the
-  // highlight is reliable). count-in = one bar (4 beats); then one root per beat.
+  // UI highlight: one chord per bar, via setTimeout (decoupled from rAF/Tone.Draw
+  // so the highlight is reliable). count-in = one bar (4 beats).
   const beatMs = (60 / bpm) * 1000;
-  const countInMs = 4 * beatMs;
-  notes.forEach((_, i) => {
+  const barMs = 4 * beatMs;
+  const countInMs = barMs;
+  roots.forEach((_, ci) => {
     bassUiTimers.push(
-      setTimeout(() => cb.onStep?.(i), countInMs + i * beatMs)
+      setTimeout(() => cb.onStep?.(ci), countInMs + ci * barMs)
     );
   });
-  // end one beat after the last root sounds
-  const endMs = countInMs + notes.length * beatMs;
+  const endMs = countInMs + numChords * barMs;
   bassUiTimers.push(
     setTimeout(() => {
       cb.onEnd?.();
