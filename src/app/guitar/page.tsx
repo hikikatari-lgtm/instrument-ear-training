@@ -1,9 +1,8 @@
 "use client";
 
 import QuizRunner from "@/components/QuizRunner";
-import Fretboard from "@/components/Fretboard";
-import { guitarQuestions, EarQuestion } from "@/lib/questions";
-import { playGuitarChord } from "@/lib/audio";
+import GuitarStimulus from "@/components/GuitarStimulus";
+import { guitarQuestions } from "@/lib/questions";
 
 export default function GuitarPage() {
   return (
@@ -12,12 +11,9 @@ export default function GuitarPage() {
       title="Guitar"
       icon="🎸"
       questions={guitarQuestions}
-      onPlay={(q: EarQuestion) => {
-        if (q.guitarChord) playGuitarChord(q.guitarChord.frets);
-      }}
-      renderVisual={(q, answered) =>
+      renderStimulus={(q, answered) =>
         q.guitarChord ? (
-          <Fretboard frets={q.guitarChord.frets} reveal={answered} />
+          <GuitarStimulus shape={q.guitarChord} answered={answered} />
         ) : null
       }
     />

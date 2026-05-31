@@ -1,10 +1,8 @@
 "use client";
 
 import QuizRunner from "@/components/QuizRunner";
-import Piano from "@/components/Piano";
-import { pianoQuestions, EarQuestion } from "@/lib/questions";
-import { playPianoChord } from "@/lib/audio";
-import { chordPitchClasses } from "@/lib/music";
+import PianoStimulus from "@/components/PianoStimulus";
+import { pianoQuestions } from "@/lib/questions";
 
 export default function PianoPage() {
   return (
@@ -13,14 +11,9 @@ export default function PianoPage() {
       title="Piano"
       icon="🎹"
       questions={pianoQuestions}
-      onPlay={(q: EarQuestion) => {
-        if (q.chord) playPianoChord(q.chord);
-      }}
-      renderVisual={(q, answered) => (
-        <Piano
-          highlight={answered && q.chord ? chordPitchClasses(q.chord) : []}
-        />
-      )}
+      renderStimulus={(q, answered) =>
+        q.chord ? <PianoStimulus chord={q.chord} answered={answered} /> : null
+      }
     />
   );
 }

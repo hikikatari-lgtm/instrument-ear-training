@@ -1,23 +1,19 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { EarQuestion } from "@/lib/questions";
-import {
-  Instrument,
-  loadProgress,
-  saveProgress,
-} from "@/lib/progress";
+import { Instrument, loadProgress, saveProgress } from "@/lib/progress";
 
 interface QuizRunnerProps {
   instrument: Instrument;
   title: string;
   icon: string;
   questions: EarQuestion[];
-  // play the audio for a question
-  onPlay: (q: EarQuestion) => void;
-  // visual diagram (keyboard / fretboard / bass line). `answered` toggles reveal.
-  renderVisual: (q: EarQuestion, answered: boolean) => React.ReactNode;
+  // Renders the play/stop control + live visual for a question. It is
+  // remounted on every question change (key on index), so it can own its
+  // playback + highlight state and stop audio on unmount.
+  renderStimulus: (q: EarQuestion, answered: boolean) => React.ReactNode;
 }
 
 export default function QuizRunner({
@@ -25,8 +21,7 @@ export default function QuizRunner({
   title,
   icon,
   questions,
-  onPlay,
-  renderVisual,
+  renderStimulus,
 }: QuizRunnerProps) {
   const [index, setIndex] = useState(0);
   const [selected, setSelected] = useState<number | null>(null);
@@ -34,23 +29,8 @@ export default function QuizRunner({
   const [correctCount, setCorrectCount] = useState(0);
   const [finished, setFinished] = useState(false);
   const [results, setResults] = useState<boolean[]>([]);
-  const unlocked = useRef(false);
 
   const q = questions[index];
-
-  const handlePlay = () => {
-    unlocked.current = true;
-    onPlay(q);
-  };
-
-  // auto-replay when moving to a new question, once audio is unlocked
-  useEffect(() => {
-    if (unlocked.current && !finished) {
-      const t = setTimeout(() => onPlay(questions[index]), 250);
-      return () => clearTimeout(t);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [index]);
 
   const handleAnswer = (i: number) => {
     if (answered) return;
@@ -90,7 +70,6 @@ export default function QuizRunner({
     setCorrectCount(0);
     setFinished(false);
     setResults([]);
-    unlocked.current = false;
   };
 
   if (finished) {
@@ -111,9 +90,7 @@ export default function QuizRunner({
               <div
                 key={i}
                 className={`flex h-9 items-center justify-center rounded text-sm font-bold ${
-                  ok
-                    ? "bg-gold/20 text-gold"
-                    : "bg-red-500/15 text-red-400"
+                  ok ? "bg-gold/20 text-gold" : "bg-red-500/15 text-red-400"
                 }`}
                 title={`Q${i + 1}`}
               >
@@ -146,10 +123,7 @@ export default function QuizRunner({
   return (
     <main className="mx-auto max-w-2xl px-4 py-6">
       <div className="mb-4 flex items-center justify-between">
-        <Link
-          href="/"
-          className="text-sm text-zinc-400 transition hover:text-gold"
-        >
+        <Link href="/" className="text-sm text-zinc-400 transition hover:text-gold">
           ← トップ
         </Link>
         <span className="text-sm text-zinc-400">
@@ -171,20 +145,8 @@ export default function QuizRunner({
       <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5 sm:p-6">
         <h2 className="text-center text-lg font-bold">{q.question}</h2>
 
-        {/* play button */}
-        <div className="mt-5 flex justify-center">
-          <button
-            onClick={handlePlay}
-            className="flex items-center gap-2 rounded-full bg-gold px-7 py-3 text-lg font-bold text-black transition hover:brightness-110 active:scale-95"
-          >
-            🔊 再生
-          </button>
-        </div>
-
-        {/* visual */}
-        <div className="mt-6 flex justify-center overflow-x-auto">
-          {renderVisual(q, answered)}
-        </div>
+        {/* play control + live visual (remounted per question) */}
+        <div key={`stim-${index}`}>{renderStimulus(q, answered)}</div>
 
         {/* choices */}
         <div className="mt-6 grid gap-3">
@@ -216,11 +178,7 @@ export default function QuizRunner({
         {/* explanation */}
         {answered && (
           <div className="animate-fade-in mt-5 rounded-xl border border-zinc-800 bg-black/40 p-4">
-            <p
-              className={`font-bold ${
-                isCorrect ? "text-gold" : "text-red-400"
-              }`}
-            >
+            <p className={`font-bold ${isCorrect ? "text-gold" : "text-red-400"}`}>
               {isCorrect ? "正解！" : "不正解"}
             </p>
             <p className="mt-2 text-sm leading-relaxed text-zinc-300">

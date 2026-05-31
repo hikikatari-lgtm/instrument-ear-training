@@ -1,9 +1,8 @@
 "use client";
 
 import QuizRunner from "@/components/QuizRunner";
-import BassLine from "@/components/BassLine";
-import { bassQuestions, EarQuestion } from "@/lib/questions";
-import { playBassLine } from "@/lib/audio";
+import BassStimulus from "@/components/BassStimulus";
+import { bassQuestions } from "@/lib/questions";
 
 export default function BassPage() {
   return (
@@ -12,12 +11,14 @@ export default function BassPage() {
       title="Bass"
       icon="🎸"
       questions={bassQuestions}
-      onPlay={(q: EarQuestion) => {
-        if (q.bassNotes) playBassLine(q.bassNotes, 90);
-      }}
-      renderVisual={(q) =>
+      renderStimulus={(q, answered) =>
         q.bassNotes ? (
-          <BassLine notes={q.bassNotes} musicKey={q.bassKey} />
+          <BassStimulus
+            notes={q.bassNotes}
+            musicKey={q.bassKey}
+            bpm={110}
+            answered={answered}
+          />
         ) : null
       }
     />

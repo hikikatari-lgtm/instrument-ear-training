@@ -148,4 +148,34 @@ export function guitarChordNotes(frets: (number | "x")[]): string[] {
   return notes;
 }
 
+// Standard 4-string bass tuning (low -> high): E1 A1 D2 G2.
+const BASS_TUNING_MIDI = [
+  noteToMidi("E1"),
+  noteToMidi("A1"),
+  noteToMidi("D2"),
+  noteToMidi("G2"),
+];
+
+export interface BassPosition {
+  string: number; // 0 = low E ... 3 = high G
+  fret: number;
+  label: string; // note name without octave
+}
+
+// Pick a playable bass position for a note: the smallest fret across the four
+// strings (preferring the thicker string on ties).
+export function bassPosition(note: string): BassPosition {
+  const midi = noteToMidi(note);
+  let best: BassPosition | null = null;
+  for (let s = 0; s < 4; s++) {
+    const fret = midi - BASS_TUNING_MIDI[s];
+    if (fret >= 0 && fret <= 16) {
+      if (!best || fret < best.fret) {
+        best = { string: s, fret, label: note.replace(/-?\d+$/, "") };
+      }
+    }
+  }
+  return best ?? { string: 0, fret: 0, label: note.replace(/-?\d+$/, "") };
+}
+
 export { SEMITONE_TO_NAME };
